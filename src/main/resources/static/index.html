@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quản lý nhân viên FPT</title>
+    <style>
+        body { max-width: 760px; margin: 2rem auto; padding: 0 1rem;
+            font: 16px system-ui, sans-serif; }
+        form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; }
+        label { display: grid; gap: .25rem; }
+        input, button { padding: .5rem; font: inherit; }
+        table { width: 100%; margin-top: 1rem; border-collapse: collapse; }
+        th, td { padding: .6rem; text-align: left; border-bottom: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+<h1>Quản lý nhân viên FPT</h1>
+
+<form id="employee-form">
+    <label>ID
+        <input name="id" inputmode="numeric" pattern="[1-9][0-9]{0,18}" required>
+    </label>
+    <label>Họ và tên
+        <input name="name" maxlength="100" required>
+    </label>
+    <label>Lương
+        <input name="salary" inputmode="decimal"
+               pattern="[0-9]{1,13}([.][0-9]{1,2})?"
+               title="Ví dụ 12000000 hoặc 12000000.50" required>
+    </label>
+    <button type="submit" value="POST">Thêm</button>
+    <button type="submit" value="PUT">Cập nhật</button>
+</form>
+
+<p id="status" role="status"></p>
+
+<h2>Danh sách nhân viên</h2>
+<button type="button" id="refresh">Tải danh sách</button>
+
+<table>
+    <thead>
+    <tr>
+        <th scope="col">ID</th>
+        <th scope="col">Họ và tên</th>
+        <th scope="col">Lương</th>
+    </tr>
+    </thead>
+    <tbody id="employees"></tbody>
+</table>
+
+<script>
+    const endpoint = '/api/employees';
+    const form = document.querySelector('#employee-form');
+    const status = document.querySelector('#status');
+    const rows = document.querySelector('#employees');
+
+    async function loadEmployees(message = '') {
+        try {
+            const response = await fetch(endpoint);
+            if (!response.ok) {
+                throw new Error(`Không tải được danh sách (HTTP ${response.status}).`);
+            }
+
+            const employees = await response.json();
+            rows.replaceChildren();
+
+            for (const employee of employees) {
+                const row = rows.insertRow();
+                row.insertCell().textContent = employee.id;
+                row.insertCell().textContent = employee.name;
+                row.insertCell().textContent = employee.salary;
+            }
+
+            if (employees.length === 0) {
+                const cell = rows.insertRow().insertCell();
+                cell.colSpan = 3;
+                cell.textContent = 'Chưa có nhân viên.';
+            }
+
+            status.textContent = message;
+        } catch (error) {
+            status.textContent = [message, error.message].filter(Boolean).join(' ');
+        }
+    }
+
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+
+        const method = event.submitter?.value ?? 'POST';
+        const fields = new FormData(form);
+        const employee = {
+            id: fields.get('id'),
+            name: fields.get('name').trim(),
+            salary: fields.get('salary')
+        };
+
+        try {
+            const response = await fetch(endpoint, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(employee)
+            });
+
+            if (!response.ok) {
+                const messages = {
+                    400: 'Dữ liệu không hợp lệ.',
+                    404: 'Không tìm thấy nhân viên có ID này.',
+                    409: 'ID nhân viên đã tồn tại.'
+                };
+                throw new Error(messages[response.status] ?? `Lỗi HTTP ${response.status}.`);
+            }
+
+            await loadEmployees(method === 'POST'
+                ? 'Đã thêm nhân viên.'
+                : 'Đã cập nhật nhân viên.');
+        } catch (error) {
+            status.textContent = error.message;
+        }
+    });
+
+    document.querySelector('#refresh').addEventListener('click', () => loadEmployees());
+    loadEmployees();
+</script>
+</body>
+</html>
